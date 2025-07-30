@@ -65,8 +65,8 @@ export default function Layout({ children }) {
 
       {/* Desktop sidebar */}
       <div className="lg:fixed lg:inset-y-0 lg:flex lg:w-64 lg:flex-col gradient-bg h-full flex flex-col p-3">
-        <h1 className="text-white text-xl font-bold mb-[10px] mt-2 p-2">Inventory System</h1>
-        <nav className="w-full mb-6 mt-12">
+        <h1 className="text-white text-xl font-bold mt-4 p-2">Inventory System</h1>
+        <nav className="w-full mb-6 mt-10">
           {navigation.map((item) => {
             const Icon = item.icon
             return (
