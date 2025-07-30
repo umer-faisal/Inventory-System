@@ -225,7 +225,7 @@ export default function Reports() {
               </div>
               <div className="ml-4">
                 <p className="text-sm font-medium text-gray-600">Inventory Value</p>
-                <p className="text-2xl font-bold text-gray-900">${totalInventoryValue.toFixed(2)}</p>
+                <p className="text-2xl font-bold text-gray-900">Rs{totalInventoryValue.toFixed(2)}</p>
               </div>
             </div>
           </div>
@@ -237,7 +237,7 @@ export default function Reports() {
               </div>
               <div className="ml-4">
                 <p className="text-sm font-medium text-gray-600">Total Sales</p>
-                <p className="text-2xl font-bold text-gray-900">${totalSalesValue.toFixed(2)}</p>
+                <p className="text-2xl font-bold text-gray-900">Rs{totalSalesValue.toFixed(2)}</p>
               </div>
             </div>
           </div>
@@ -249,7 +249,7 @@ export default function Reports() {
               </div>
               <div className="ml-4">
                 <p className="text-sm font-medium text-gray-600">Total Purchases</p>
-                <p className="text-2xl font-bold text-gray-900">${totalPurchasesValue.toFixed(2)}</p>
+                <p className="text-2xl font-bold text-gray-900">Rs{totalPurchasesValue.toFixed(2)}</p>
               </div>
             </div>
           </div>
