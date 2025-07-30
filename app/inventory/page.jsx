@@ -293,7 +293,7 @@ export default function Inventory() {
                     </div>
 
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Unit Cost ($)</label>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Unit Cost (Rs)</label>
                       <input
                         type="number"
                         step="0.01"
@@ -306,7 +306,7 @@ export default function Inventory() {
                     </div>
 
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Selling Price ($)</label>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Selling Price (Rs)</label>
                       <input
                         type="number"
                         step="0.01"

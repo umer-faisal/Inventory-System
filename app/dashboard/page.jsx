@@ -63,14 +63,14 @@ export default function Dashboard() {
     },
     {
       name: "Monthly Sales",
-      value: `$${monthlySales.toFixed(2)}`,
+      value: `Rs${monthlySales.toFixed(2)}`,
       icon: TrendingUp,
       color: "text-emerald-600",
       bgColor: "bg-emerald-100",
     },
     {
       name: "Monthly Purchases",
-      value: `$${monthlyPurchases.toFixed(2)}`,
+      value: `Rs${monthlyPurchases.toFixed(2)}`,
       icon: ShoppingCart,
       color: "text-purple-600",
       bgColor: "bg-purple-100",
@@ -152,7 +152,7 @@ export default function Dashboard() {
                         <p className="font-medium text-gray-900">{sale.customer}</p>
                         <p className="text-sm text-gray-500">{new Date(sale.date).toLocaleDateString()}</p>
                       </div>
-                      <p className="font-medium text-green-600">${sale.total.toFixed(2)}</p>
+                      <p className="font-medium text-green-600">Rs{sale.total.toFixed(2)}</p>
                     </div>
                   ))}
               </div>
@@ -178,7 +178,7 @@ export default function Dashboard() {
                         <p className="font-medium text-gray-900">{purchase.supplier}</p>
                         <p className="text-sm text-gray-500">{new Date(purchase.date).toLocaleDateString()}</p>
                       </div>
-                      <p className="font-medium text-blue-600">${purchase.total.toFixed(2)}</p>
+                      <p className="font-medium text-blue-600">Rs{purchase.total.toFixed(2)}</p>
                     </div>
                   ))}
               </div>
