@@ -4,6 +4,7 @@ import { useState, useEffect } from "react"
 import Layout from "../components/Layout"
 import { TrendingUp, Package, AlertTriangle, ShoppingCart } from "lucide-react"
 
+
 export default function Dashboard() {
   const [products, setProducts] = useState([])
   const [sales, setSales] = useState([])

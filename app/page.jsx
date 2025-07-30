@@ -36,8 +36,8 @@ export default function LoginPage() {
     <div className="min-h-screen gradient-bg flex items-center justify-center p-4">
       <div className="bg-white rounded-2xl shadow-2xl p-8 w-full max-w-md">
         <div className="text-center mb-8">
-          <div className="w-16 h-16  rounded-full flex items-center justify-center mx-auto mb-4">
-            <Image src="/assests/logo.png" alt="Logo" width={64} height={64} />
+          <div className="w-16 h-16 gradient-bg rounded-full flex items-center justify-center mx-auto mb-4">
+            <Image src="/assests/fav.png" alt="Logo" width={64} height={64} />
           </div>
           <h1 className="text-2xl font-bold text-gray-800">Inventory Management</h1>
           <p className="text-gray-600 mt-2">Sign in to your account</p>

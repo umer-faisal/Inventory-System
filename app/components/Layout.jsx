@@ -4,6 +4,7 @@ import { useState, useEffect } from "react"
 import { useRouter, usePathname } from "next/navigation"
 import Link from "next/link"
 import { LayoutDashboard, Package, ShoppingCart, TrendingUp, FileText, LogOut, Menu, X } from "lucide-react"
+import Image from "next/image"
 
 export default function Layout({ children }) {
   const [sidebarOpen, setSidebarOpen] = useState(false)
@@ -65,6 +66,7 @@ export default function Layout({ children }) {
 
       {/* Desktop sidebar */}
       <div className="lg:fixed lg:inset-y-0 lg:flex lg:w-64 lg:flex-col gradient-bg h-full flex flex-col p-3">
+        <Image src="/assests/fav.png" alt="Logo" width={64} height={64} />
         <h1 className="text-white text-xl font-bold mt-4 p-2">Inventory System</h1>
         <nav className="w-full mb-6 mt-10">
           {navigation.map((item) => {
