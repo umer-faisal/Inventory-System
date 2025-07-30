@@ -1,0 +1,28 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --primary: #0f2027;
+    --secondary: #2c5364;
+  }
+}
+
+@layer components {
+  .gradient-bg {
+    background: linear-gradient(135deg, #0f2027 0%, #2c5364 100%);
+  }
+
+  .card {
+    @apply bg-white rounded-lg shadow-lg p-6 border border-gray-200;
+  }
+
+  .btn-primary {
+    @apply bg-gradient-to-r from-[#0F2027] to-[#2C5364] text-white px-4 py-2 rounded-lg hover:opacity-90 transition-opacity;
+  }
+
+  .btn-secondary {
+    @apply border border-[#2C5364] text-[#2C5364] px-4 py-2 rounded-lg hover:bg-[#2C5364] hover:text-white transition-colors;
+  }
+}
