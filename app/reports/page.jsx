@@ -350,10 +350,10 @@ export default function Reports() {
                             </span>
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                            ${product.unitCost.toFixed(2)}
+                            Rs {product.unitCost.toFixed(2)}
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                            ${(product.quantity * product.unitCost).toFixed(2)}
+                            Rs {(product.quantity * product.unitCost).toFixed(2)}
                           </td>
                         </tr>
                       ))}
@@ -408,7 +408,7 @@ export default function Reports() {
                             </div>
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-green-600">
-                            ${sale.total.toFixed(2)}
+                            Rs {sale.total.toFixed(2)}
                           </td>
                         </tr>
                       ))}
@@ -463,7 +463,7 @@ export default function Reports() {
                             </div>
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-blue-600">
-                            ${purchase.total.toFixed(2)}
+                            Rs {purchase.total.toFixed(2)}
                           </td>
                         </tr>
                       ))}

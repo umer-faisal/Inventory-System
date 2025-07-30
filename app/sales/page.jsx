@@ -190,7 +190,7 @@ export default function Sales() {
                         </div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-green-600">
-                        ${sale.total.toFixed(2)}
+                        Rs {sale.total.toFixed(2)}
                       </td>
                     </tr>
                   ))}
@@ -306,7 +306,7 @@ export default function Sales() {
                           />
                         </div>
                         <div className="flex items-center justify-between">
-                          <span className="text-sm font-medium">${(item.quantity * item.price).toFixed(2)}</span>
+                          <span className="text-sm font-medium">Rs {(item.quantity * item.price).toFixed(2)}</span>
                           <button
                             type="button"
                             onClick={() => removeItem(index)}
@@ -323,7 +323,7 @@ export default function Sales() {
                   <div className="border-t pt-4">
                     <div className="flex justify-between items-center text-lg font-bold">
                       <span>Total:</span>
-                      <span>${calculateTotal().toFixed(2)}</span>
+                      <span>Rs {calculateTotal().toFixed(2)}</span>
                     </div>
                   </div>
 

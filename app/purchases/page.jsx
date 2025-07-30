@@ -161,7 +161,7 @@ export default function Purchases() {
                         </div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                        ${purchase.total.toFixed(2)}
+                        Rs{purchase.total.toFixed(2)}
                       </td>
                     </tr>
                   ))}
@@ -273,7 +273,7 @@ export default function Purchases() {
                           />
                         </div>
                         <div className="flex items-center justify-between">
-                          <span className="text-sm font-medium">${(item.quantity * item.cost).toFixed(2)}</span>
+                          <span className="text-sm font-medium">Rs {(item.quantity * item.cost).toFixed(2)}</span>
                           <button
                             type="button"
                             onClick={() => removeItem(index)}
@@ -290,7 +290,7 @@ export default function Purchases() {
                   <div className="border-t pt-4">
                     <div className="flex justify-between items-center text-lg font-bold">
                       <span>Total:</span>
-                      <span>${calculateTotal().toFixed(2)}</span>
+                      <span>Rs {calculateTotal().toFixed(2)}</span>
                     </div>
                   </div>
 
