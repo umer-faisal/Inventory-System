@@ -3,48 +3,72 @@
 import { useState, useEffect } from "react"
 import Layout from "../components/Layout"
 import { TrendingUp, Package, AlertTriangle, ShoppingCart } from "lucide-react"
-
+import { supabase } from "../../lib/supabase"
 
 export default function Dashboard() {
   const [products, setProducts] = useState([])
   const [sales, setSales] = useState([])
-  const [purchases, setPurchases] = useState([])
+  const [lowStockItems, setLowStockItems] = useState([])
+  const [totalStock, setTotalStock] = useState(0)
 
   useEffect(() => {
-    // Load data from localStorage
-    const savedProducts = localStorage.getItem("products")
-    const savedSales = localStorage.getItem("sales")
-    const savedPurchases = localStorage.getItem("purchases")
+    async function fetchData() {
+      try {
+        // Fetch Products
+        const { data: productsData } = await supabase.from("products").select("*")
+        
+        // Fetch Inventory (to calculate stock and low stock)
+        const { data: inventoryData } = await supabase.from("inventory").select(`
+          *,
+          products ( name, sku )
+        `)
+        
+        // Fetch Sales
+        const { data: salesData } = await supabase.from("sales").select("*").order('created_at', { ascending: false }).limit(10)
 
-    if (savedProducts) setProducts(JSON.parse(savedProducts))
-    if (savedSales) setSales(JSON.parse(savedSales))
-    if (savedPurchases) setPurchases(JSON.parse(savedPurchases))
+        if (productsData) setProducts(productsData)
+        if (salesData) setSales(salesData)
+        
+        if (inventoryData) {
+          let total = 0
+          let lowStock = []
+          inventoryData.forEach(item => {
+            total += item.quantity || 0
+            if (item.quantity <= (item.min_stock || 5)) {
+              lowStock.push({
+                id: item.id,
+                name: item.products?.name || "Unknown",
+                warehouse: item.warehouse,
+                quantity: item.quantity,
+                minStock: item.min_stock || 5
+              })
+            }
+          })
+          setTotalStock(total)
+          setLowStockItems(lowStock)
+        }
+      } catch (error) {
+        console.error("Error fetching dashboard data:", error)
+      }
+    }
+
+    fetchData()
   }, [])
 
   // Calculate metrics
   const totalProducts = products.length
-  const totalStock = products.reduce((sum, product) => sum + product.quantity, 0)
-  const lowStockItems = products.filter((product) => product.quantity <= product.minStock)
 
-  const totalSales = sales.reduce((sum, sale) => sum + sale.total, 0)
-  const totalPurchases = purchases.reduce((sum, purchase) => sum + purchase.total, 0)
+  const totalSales = sales.reduce((sum, sale) => sum + Number(sale.total_amount || 0), 0)
 
   const currentMonth = new Date().getMonth()
   const currentYear = new Date().getFullYear()
 
   const monthlySales = sales
     .filter((sale) => {
-      const saleDate = new Date(sale.date)
+      const saleDate = new Date(sale.created_at)
       return saleDate.getMonth() === currentMonth && saleDate.getFullYear() === currentYear
     })
-    .reduce((sum, sale) => sum + sale.total, 0)
-
-  const monthlyPurchases = purchases
-    .filter((purchase) => {
-      const purchaseDate = new Date(purchase.date)
-      return purchaseDate.getMonth() === currentMonth && purchaseDate.getFullYear() === currentYear
-    })
-    .reduce((sum, purchase) => sum + purchase.total, 0)
+    .reduce((sum, sale) => sum + Number(sale.total_amount || 0), 0)
 
   const stats = [
     {
@@ -63,14 +87,14 @@ export default function Dashboard() {
     },
     {
       name: "Monthly Sales",
-      value: `Rs${monthlySales.toFixed(2)}`,
+      value: `Rs ${monthlySales.toLocaleString()}`,
       icon: TrendingUp,
       color: "text-emerald-600",
       bgColor: "bg-emerald-100",
     },
     {
-      name: "Monthly Purchases",
-      value: `Rs${monthlyPurchases.toFixed(2)}`,
+      name: "Total Sales",
+      value: `Rs ${totalSales.toLocaleString()}`,
       icon: ShoppingCart,
       color: "text-purple-600",
       bgColor: "bg-purple-100",
@@ -82,7 +106,7 @@ export default function Dashboard() {
       <div className="space-y-8">
         <div>
           <h1 className="text-3xl font-bold text-gray-900">Dashboard</h1>
-          <p className="mt-2 text-gray-600">Overview of your inventory and business metrics</p>
+          <p className="mt-2 text-gray-600">Overview of your inventory and business metrics (Live from Supabase)</p>
         </div>
 
         {/* Stats Grid */}
@@ -90,7 +114,7 @@ export default function Dashboard() {
           {stats.map((stat) => {
             const Icon = stat.icon
             return (
-              <div key={stat.name} className="card">
+              <div key={stat.name} className="card bg-white p-6 rounded-lg shadow-sm">
                 <div className="flex items-center">
                   <div className={`p-3 rounded-lg ${stat.bgColor}`}>
                     <Icon className={`w-6 h-6 ${stat.color}`} />
@@ -107,7 +131,7 @@ export default function Dashboard() {
 
         {/* Low Stock Alert */}
         {lowStockItems.length > 0 && (
-          <div className="card border-l-4 border-red-500 bg-red-50">
+          <div className="card border-l-4 border-red-500 bg-red-50 p-6 rounded-lg">
             <div className="flex items-center">
               <AlertTriangle className="w-6 h-6 text-red-500" />
               <div className="ml-3">
@@ -118,15 +142,15 @@ export default function Dashboard() {
             <div className="mt-4">
               <div className="space-y-2">
                 {lowStockItems.slice(0, 5).map((item) => (
-                  <div key={item.id} className="flex justify-between items-center text-sm">
-                    <span className="text-red-800 font-medium">{item.name}</span>
-                    <span className="text-red-600">
+                  <div key={item.id} className="flex justify-between items-center text-sm border-b border-red-100 pb-2">
+                    <span className="text-red-800 font-medium">{item.name} ({item.warehouse})</span>
+                    <span className="text-red-600 font-bold">
                       {item.quantity} / {item.minStock} min
                     </span>
                   </div>
                 ))}
                 {lowStockItems.length > 5 && (
-                  <p className="text-red-600 text-sm">+{lowStockItems.length - 5} more items</p>
+                  <p className="text-red-600 text-sm mt-2">+{lowStockItems.length - 5} more items</p>
                 )}
               </div>
             </div>
@@ -136,54 +160,29 @@ export default function Dashboard() {
         {/* Recent Activity */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           {/* Recent Sales */}
-          <div className="card">
+          <div className="card bg-white p-6 rounded-lg shadow-sm">
             <h3 className="text-lg font-medium text-gray-900 mb-4">Recent Sales</h3>
             {sales.length > 0 ? (
               <div className="space-y-3">
                 {sales
-                  .slice(-5)
-                  .reverse()
+                  .slice(0, 5)
                   .map((sale) => (
                     <div
                       key={sale.id}
                       className="flex justify-between items-center py-2 border-b border-gray-100 last:border-b-0"
                     >
                       <div>
-                        <p className="font-medium text-gray-900">{sale.customer}</p>
-                        <p className="text-sm text-gray-500">{new Date(sale.date).toLocaleDateString()}</p>
+                        <p className="font-medium text-gray-900">
+                           {sale.has_tax ? 'Tax Invoice' : 'Non-Tax Invoice'} ({sale.warehouse})
+                        </p>
+                        <p className="text-sm text-gray-500">{new Date(sale.created_at).toLocaleDateString()}</p>
                       </div>
-                      <p className="font-medium text-green-600">Rs{sale.total.toFixed(2)}</p>
+                      <p className="font-medium text-green-600">Rs {Number(sale.total_amount).toLocaleString()}</p>
                     </div>
                   ))}
               </div>
             ) : (
               <p className="text-gray-500 text-center py-4">No sales recorded yet</p>
-            )}
-          </div>
-
-          {/* Recent Purchases */}
-          <div className="card">
-            <h3 className="text-lg font-medium text-gray-900 mb-4">Recent Purchases</h3>
-            {purchases.length > 0 ? (
-              <div className="space-y-3">
-                {purchases
-                  .slice(-5)
-                  .reverse()
-                  .map((purchase) => (
-                    <div
-                      key={purchase.id}
-                      className="flex justify-between items-center py-2 border-b border-gray-100 last:border-b-0"
-                    >
-                      <div>
-                        <p className="font-medium text-gray-900">{purchase.supplier}</p>
-                        <p className="text-sm text-gray-500">{new Date(purchase.date).toLocaleDateString()}</p>
-                      </div>
-                      <p className="font-medium text-blue-600">Rs{purchase.total.toFixed(2)}</p>
-                    </div>
-                  ))}
-              </div>
-            ) : (
-              <p className="text-gray-500 text-center py-4">No purchases recorded yet</p>
             )}
           </div>
         </div>

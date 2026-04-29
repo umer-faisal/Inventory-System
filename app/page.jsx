@@ -4,32 +4,57 @@ import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import Image from "next/image"
 import { Eye, EyeOff, Lock, User } from "lucide-react"
+import { supabase } from "../lib/supabase"
 
 export default function LoginPage() {
   const [username, setUsername] = useState("")
   const [password, setPassword] = useState("")
   const [showPassword, setShowPassword] = useState(false)
   const [error, setError] = useState("")
+  const [loading, setLoading] = useState(false)
   const router = useRouter()
 
   useEffect(() => {
     // Check if already logged in
-    const isLoggedIn = localStorage.getItem("isLoggedIn")
-    if (isLoggedIn === "true") {
+    const userStr = localStorage.getItem("user")
+    if (userStr) {
       router.push("/dashboard")
     }
   }, [router])
 
-  const handleLogin = (e) => {
+  const handleLogin = async (e) => {
     e.preventDefault()
+    setLoading(true)
+    setError("")
 
-    // Simple admin login (in production, use proper authentication)
-    if (username === "admin" && password === "admin123") {
-      localStorage.setItem("isLoggedIn", "true")
+    try {
+      const { data, error } = await supabase
+        .from('app_users')
+        .select('*')
+        .eq('username', username)
+        .eq('password', password)
+        .single()
+
+      if (error || !data) {
+        setError("Invalid username or password. Please try again.")
+        setLoading(false)
+        return
+      }
+
+      // Store user info in localStorage
+      localStorage.setItem("user", JSON.stringify({
+        id: data.id,
+        username: data.username,
+        full_name: data.full_name,
+        role: data.role
+      }))
+      
       router.push("/dashboard")
-    } else {
-      setError("Invalid credentials. Use admin/admin123")
+    } catch (err) {
+      console.error(err)
+      setError("Database connection error. Ensure you ran the SQL update.")
     }
+    setLoading(false)
   }
 
   return (
@@ -85,12 +110,15 @@ export default function LoginPage() {
             <div className="bg-red-50 border border-red-200 text-red-600 px-4 py-3 rounded-lg text-sm">{error}</div>
           )}
 
-          <button type="submit" className="w-full btn-primary py-3 text-lg font-semibold">
-            Sign In
+          <button type="submit" disabled={loading} className="w-full btn-primary py-3 text-lg font-semibold disabled:opacity-50">
+            {loading ? 'Signing In...' : 'Sign In'}
           </button>
         </form>
 
-        <div className="mt-6 text-center text-sm text-gray-500">Demo credentials: admin / admin123</div>
+        <div className="mt-6 text-center text-sm text-gray-500 border-t pt-4">
+          <p>Default Admin: <strong>admin</strong> / <strong>admin123</strong></p>
+          <p className="text-xs text-red-500 mt-2">Note: Please run the latest SQL update snippet in Supabase SQL Editor first.</p>
+        </div>
       </div>
     </div>
   )

@@ -2,478 +2,225 @@
 
 import { useState, useEffect } from "react"
 import Layout from "../components/Layout"
-import { Download, Filter, BarChart3, TrendingUp, Package } from "lucide-react"
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts"
+import { supabase } from "../../lib/supabase"
+import { useRouter } from "next/navigation"
+import { TrendingUp, Package, AlertTriangle, DollarSign } from "lucide-react"
 
 export default function Reports() {
-  const [products, setProducts] = useState([])
-  const [sales, setSales] = useState([])
-  const [purchases, setPurchases] = useState([])
-  const [activeTab, setActiveTab] = useState("inventory")
-
-  const [filters, setFilters] = useState({
-    startDate: "",
-    endDate: "",
-    category: "",
-    customer: "",
-    supplier: "",
-  })
+  const [tab, setTab] = useState("overview")
+  const [salesChart, setSalesChart] = useState([])
+  const [stockChart, setStockChart] = useState([])
+  const [customerReport, setCustomerReport] = useState([])
+  const [productReport, setProductReport] = useState([])
+  const [summary, setSummary] = useState({ totalRevenue: 0, totalProfit: 0, lowStock: 0, totalInvoices: 0 })
+  const router = useRouter()
 
   useEffect(() => {
-    const savedProducts = localStorage.getItem("products")
-    const savedSales = localStorage.getItem("sales")
-    const savedPurchases = localStorage.getItem("purchases")
+    const userStr = localStorage.getItem("user")
+    if (!userStr || JSON.parse(userStr).role !== 'admin') { router.push("/dashboard"); return }
+    fetchData()
+  }, [router])
 
-    if (savedProducts) setProducts(JSON.parse(savedProducts))
-    if (savedSales) setSales(JSON.parse(savedSales))
-    if (savedPurchases) setPurchases(JSON.parse(savedPurchases))
-  }, [])
+  const fetchData = async () => {
+    // Sales with items
+    const { data: sales } = await supabase.from("sales").select("*, customers(name), sale_items(*, products(name, cost_price))")
+    // Inventory
+    const { data: inventory } = await supabase.from("inventory").select("*, products(name)")
 
-  const categories = ["Servo Motors", "PLCs", "Sensors", "Actuators", "Controllers", "Other"]
-  const customers = [
-    "Acme Manufacturing",
-    "Tech Solutions Inc.",
-    "Industrial Corp.",
-    "AutoTech Ltd.",
-    "Control Systems Co.",
-  ]
-  const suppliers = [
-    "ABC Electronics",
-    "TechSupply Co.",
-    "Industrial Parts Ltd.",
-    "AutoMation Inc.",
-    "Control Systems Pro",
-  ]
+    if (sales) {
+      let totalRev = 0, totalCost = 0, invoiceCount = 0
+      const monthly = {}, customerMap = {}, productMap = {}
 
-  const getProductName = (productId) => {
-    const product = products.find((p) => p.id === productId)
-    return product ? `${product.name} (${product.brand} - ${product.model})` : "Unknown Product"
-  }
+      sales.forEach(sale => {
+        if (sale.status !== 'Invoice') return
+        totalRev += Number(sale.total_amount)
+        invoiceCount++
 
-  const filteredSales = sales.filter((sale) => {
-    const saleDate = new Date(sale.date)
-    const startDate = filters.startDate ? new Date(filters.startDate) : null
-    const endDate = filters.endDate ? new Date(filters.endDate) : null
+        const month = new Date(sale.created_at).toLocaleString('default', { month: 'short', year: '2-digit' })
+        monthly[month] = (monthly[month] || 0) + Number(sale.total_amount)
 
-    const dateMatch = (!startDate || saleDate >= startDate) && (!endDate || saleDate <= endDate)
-    const customerMatch = !filters.customer || sale.customer === filters.customer
+        // Customer report
+        const cname = sale.customers?.name || "Unknown"
+        if (!customerMap[cname]) customerMap[cname] = { name: cname, total: 0, count: 0 }
+        customerMap[cname].total += Number(sale.total_amount)
+        customerMap[cname].count++
 
-    return dateMatch && customerMatch
-  })
+        // Product & profit
+        sale.sale_items?.forEach(item => {
+          const cost = Number(item.products?.cost_price || 0) * item.quantity
+          totalCost += cost
+          const pname = item.products?.name || "Unknown"
+          if (!productMap[pname]) productMap[pname] = { name: pname, revenue: 0, cost: 0, qty: 0 }
+          productMap[pname].revenue += Number(item.total_price)
+          productMap[pname].cost += cost
+          productMap[pname].qty += item.quantity
+        })
+      })
 
-  const filteredPurchases = purchases.filter((purchase) => {
-    const purchaseDate = new Date(purchase.date)
-    const startDate = filters.startDate ? new Date(filters.startDate) : null
-    const endDate = filters.endDate ? new Date(filters.endDate) : null
-
-    const dateMatch = (!startDate || purchaseDate >= startDate) && (!endDate || purchaseDate <= endDate)
-    const supplierMatch = !filters.supplier || purchase.supplier === filters.supplier
-
-    return dateMatch && supplierMatch
-  })
-
-  const filteredProducts = products.filter((product) => {
-    return !filters.category || product.category === filters.category
-  })
-
-  const exportToCSV = (data, filename) => {
-    if (data.length === 0) {
-      alert("No data to export")
-      return
+      setSalesChart(Object.entries(monthly).map(([name, Revenue]) => ({ name, Revenue })))
+      setCustomerReport(Object.values(customerMap).sort((a, b) => b.total - a.total))
+      setProductReport(Object.values(productMap).sort((a, b) => b.revenue - a.revenue).map(p => ({ ...p, profit: p.revenue - p.cost, margin: p.revenue > 0 ? (((p.revenue - p.cost) / p.revenue) * 100).toFixed(1) : 0 })))
+      setSummary(prev => ({ ...prev, totalRevenue: totalRev, totalProfit: totalRev - totalCost, totalInvoices: invoiceCount }))
     }
 
-    const headers = Object.keys(data[0]).join(",")
-    const csvContent = [headers, ...data.map((row) => Object.values(row).join(","))].join("\n")
-
-    const blob = new Blob([csvContent], { type: "text/csv" })
-    const url = window.URL.createObjectURL(blob)
-    const a = document.createElement("a")
-    a.href = url
-    a.download = `${filename}.csv`
-    a.click()
-    window.URL.revokeObjectURL(url)
+    if (inventory) {
+      let lowCount = 0
+      const wh = { Nazimabad: 0, SITE: 0 }
+      inventory.forEach(i => {
+        wh[i.warehouse] = (wh[i.warehouse] || 0) + i.quantity
+        if (i.quantity <= i.min_stock) lowCount++
+      })
+      setStockChart([{ name: 'Nazimabad', Stock: wh.Nazimabad }, { name: 'SITE', Stock: wh.SITE }])
+      setSummary(prev => ({ ...prev, lowStock: lowCount }))
+    }
   }
 
-  const exportInventoryReport = () => {
-    const reportData = filteredProducts.map((product) => ({
-      Name: product.name,
-      Brand: product.brand,
-      Model: product.model,
-      Category: product.category,
-      "Current Stock": product.quantity,
-      "Min Stock": product.minStock,
-      "Unit Cost": product.unitCost,
-      "Selling Price": product.sellingPrice,
-      "Stock Value": (product.quantity * product.unitCost).toFixed(2),
-    }))
-    exportToCSV(reportData, "inventory-report")
-  }
-
-  const exportSalesReport = () => {
-    const reportData = filteredSales.map((sale) => ({
-      Date: sale.date,
-      Customer: sale.customer,
-      "Items Count": sale.items.length,
-      Total: sale.total.toFixed(2),
-    }))
-    exportToCSV(reportData, "sales-report")
-  }
-
-  const exportPurchasesReport = () => {
-    const reportData = filteredPurchases.map((purchase) => ({
-      Date: purchase.date,
-      Supplier: purchase.supplier,
-      "Items Count": purchase.items.length,
-      Total: purchase.total.toFixed(2),
-    }))
-    exportToCSV(reportData, "purchases-report")
-  }
-
-  const totalInventoryValue = filteredProducts.reduce((sum, product) => sum + product.quantity * product.unitCost, 0)
-
-  const totalSalesValue = filteredSales.reduce((sum, sale) => sum + sale.total, 0)
-  const totalPurchasesValue = filteredPurchases.reduce((sum, purchase) => sum + purchase.total, 0)
-
-  const lowStockItems = filteredProducts.filter((product) => product.quantity <= product.minStock)
+  const tabs = [
+    { id: "overview", label: "Overview" },
+    { id: "customers", label: "Customer-wise" },
+    { id: "products", label: "Product-wise" },
+    { id: "stock", label: "Stock" },
+  ]
 
   return (
     <Layout>
       <div className="space-y-6">
         <div>
           <h1 className="text-3xl font-bold text-gray-900">Reports & Analytics</h1>
-          <p className="mt-2 text-gray-600">Generate comprehensive reports and insights</p>
-        </div>
-
-        {/* Filters */}
-        <div className="card">
-          <h3 className="text-lg font-medium text-gray-900 mb-4 flex items-center">
-            <Filter className="w-5 h-5 mr-2" />
-            Filters
-          </h3>
-          <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Start Date</label>
-              <input
-                type="date"
-                value={filters.startDate}
-                onChange={(e) => setFilters({ ...filters, startDate: e.target.value })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#2C5364] focus:border-transparent text-sm"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">End Date</label>
-              <input
-                type="date"
-                value={filters.endDate}
-                onChange={(e) => setFilters({ ...filters, endDate: e.target.value })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#2C5364] focus:border-transparent text-sm"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Category</label>
-              <select
-                value={filters.category}
-                onChange={(e) => setFilters({ ...filters, category: e.target.value })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#2C5364] focus:border-transparent text-sm"
-              >
-                <option value="">All Categories</option>
-                {categories.map((category) => (
-                  <option key={category} value={category}>
-                    {category}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Customer</label>
-              <select
-                value={filters.customer}
-                onChange={(e) => setFilters({ ...filters, customer: e.target.value })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#2C5364] focus:border-transparent text-sm"
-              >
-                <option value="">All Customers</option>
-                {customers.map((customer) => (
-                  <option key={customer} value={customer}>
-                    {customer}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Supplier</label>
-              <select
-                value={filters.supplier}
-                onChange={(e) => setFilters({ ...filters, supplier: e.target.value })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#2C5364] focus:border-transparent text-sm"
-              >
-                <option value="">All Suppliers</option>
-                {suppliers.map((supplier) => (
-                  <option key={supplier} value={supplier}>
-                    {supplier}
-                  </option>
-                ))}
-              </select>
-            </div>
-          </div>
+          <p className="mt-2 text-gray-600">Complete business performance reports as per SRS Clause 11</p>
         </div>
 
         {/* Summary Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          <div className="card">
-            <div className="flex items-center">
-              <div className="p-3 rounded-lg bg-blue-100">
-                <Package className="w-6 h-6 text-blue-600" />
-              </div>
-              <div className="ml-4">
-                <p className="text-sm font-medium text-gray-600">Inventory Value</p>
-                <p className="text-2xl font-bold text-gray-900">Rs{totalInventoryValue.toFixed(2)}</p>
-              </div>
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+          {[
+            { label: "Total Revenue", value: `Rs ${summary.totalRevenue.toLocaleString()}`, icon: DollarSign, color: "bg-green-50 border-green-200 text-green-800" },
+            { label: "Est. Profit", value: `Rs ${summary.totalProfit.toLocaleString()}`, icon: TrendingUp, color: "bg-blue-50 border-blue-200 text-blue-800" },
+            { label: "Total Invoices", value: summary.totalInvoices, icon: Package, color: "bg-purple-50 border-purple-200 text-purple-800" },
+            { label: "Low Stock Items", value: summary.lowStock, icon: AlertTriangle, color: "bg-red-50 border-red-200 text-red-800" },
+          ].map(card => (
+            <div key={card.label} className={`border rounded-xl p-4 ${card.color}`}>
+              <p className="text-xs font-semibold uppercase tracking-wide opacity-70">{card.label}</p>
+              <p className="text-2xl font-bold mt-1">{card.value}</p>
             </div>
-          </div>
-
-          <div className="card">
-            <div className="flex items-center">
-              <div className="p-3 rounded-lg bg-green-100">
-                <TrendingUp className="w-6 h-6 text-green-600" />
-              </div>
-              <div className="ml-4">
-                <p className="text-sm font-medium text-gray-600">Total Sales</p>
-                <p className="text-2xl font-bold text-gray-900">Rs{totalSalesValue.toFixed(2)}</p>
-              </div>
-            </div>
-          </div>
-
-          <div className="card">
-            <div className="flex items-center">
-              <div className="p-3 rounded-lg bg-purple-100">
-                <BarChart3 className="w-6 h-6 text-purple-600" />
-              </div>
-              <div className="ml-4">
-                <p className="text-sm font-medium text-gray-600">Total Purchases</p>
-                <p className="text-2xl font-bold text-gray-900">Rs{totalPurchasesValue.toFixed(2)}</p>
-              </div>
-            </div>
-          </div>
+          ))}
         </div>
 
         {/* Tabs */}
-        <div className="card">
-          <div className="border-b border-gray-200">
-            <nav className="-mb-px flex space-x-8">
-              {[
-                { id: "inventory", name: "Inventory Report", icon: Package },
-                { id: "sales", name: "Sales Report", icon: TrendingUp },
-                { id: "purchases", name: "Purchases Report", icon: BarChart3 },
-              ].map((tab) => {
-                const Icon = tab.icon
-                return (
-                  <button
-                    key={tab.id}
-                    onClick={() => setActiveTab(tab.id)}
-                    className={`flex items-center py-2 px-1 border-b-2 font-medium text-sm ${
-                      activeTab === tab.id
-                        ? "border-[#2C5364] text-[#2C5364]"
-                        : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
-                    }`}
-                  >
-                    <Icon className="w-4 h-4 mr-2" />
-                    {tab.name}
-                  </button>
-                )
-              })}
-            </nav>
-          </div>
-
-          <div className="pt-6">
-            {activeTab === "inventory" && (
-              <div className="space-y-4">
-                <div className="flex justify-between items-center">
-                  <h3 className="text-lg font-medium text-gray-900">Inventory Summary</h3>
-                  <button onClick={exportInventoryReport} className="btn-primary flex items-center gap-2 text-sm">
-                    <Download className="w-4 h-4" />
-                    Export CSV
-                  </button>
-                </div>
-
-                {lowStockItems.length > 0 && (
-                  <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-4">
-                    <h4 className="text-red-800 font-medium mb-2">Low Stock Alert ({lowStockItems.length} items)</h4>
-                    <div className="space-y-1">
-                      {lowStockItems.map((item) => (
-                        <div key={item.id} className="text-sm text-red-700">
-                          {item.name} - Current: {item.quantity}, Min: {item.minStock}
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                <div className="overflow-x-auto">
-                  <table className="min-w-full divide-y divide-gray-200">
-                    <thead className="bg-gray-50">
-                      <tr>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                          Product
-                        </th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                          Category
-                        </th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                          Stock
-                        </th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                          Unit Cost
-                        </th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                          Stock Value
-                        </th>
-                      </tr>
-                    </thead>
-                    <tbody className="bg-white divide-y divide-gray-200">
-                      {filteredProducts.map((product) => (
-                        <tr key={product.id} className="hover:bg-gray-50">
-                          <td className="px-6 py-4 whitespace-nowrap">
-                            <div className="text-sm font-medium text-gray-900">{product.name}</div>
-                            <div className="text-sm text-gray-500">
-                              {product.brand} - {product.model}
-                            </div>
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{product.category}</td>
-                          <td className="px-6 py-4 whitespace-nowrap">
-                            <span
-                              className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
-                                product.quantity <= product.minStock
-                                  ? "bg-red-100 text-red-800"
-                                  : "bg-green-100 text-green-800"
-                              }`}
-                            >
-                              {product.quantity} units
-                            </span>
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                            Rs {product.unitCost.toFixed(2)}
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                            Rs {(product.quantity * product.unitCost).toFixed(2)}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            )}
-
-            {activeTab === "sales" && (
-              <div className="space-y-4">
-                <div className="flex justify-between items-center">
-                  <h3 className="text-lg font-medium text-gray-900">Sales Report</h3>
-                  <button onClick={exportSalesReport} className="btn-primary flex items-center gap-2 text-sm">
-                    <Download className="w-4 h-4" />
-                    Export CSV
-                  </button>
-                </div>
-
-                <div className="overflow-x-auto">
-                  <table className="min-w-full divide-y divide-gray-200">
-                    <thead className="bg-gray-50">
-                      <tr>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                          Date
-                        </th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                          Customer
-                        </th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                          Items
-                        </th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                          Total
-                        </th>
-                      </tr>
-                    </thead>
-                    <tbody className="bg-white divide-y divide-gray-200">
-                      {filteredSales.map((sale) => (
-                        <tr key={sale.id} className="hover:bg-gray-50">
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                            {new Date(sale.date).toLocaleDateString()}
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{sale.customer}</td>
-                          <td className="px-6 py-4 text-sm text-gray-900">
-                            <div className="space-y-1">
-                              {sale.items.map((item, index) => (
-                                <div key={index} className="text-xs">
-                                  {getProductName(item.productId)} - Qty: {item.quantity}
-                                </div>
-                              ))}
-                            </div>
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-green-600">
-                            Rs {sale.total.toFixed(2)}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            )}
-
-            {activeTab === "purchases" && (
-              <div className="space-y-4">
-                <div className="flex justify-between items-center">
-                  <h3 className="text-lg font-medium text-gray-900">Purchases Report</h3>
-                  <button onClick={exportPurchasesReport} className="btn-primary flex items-center gap-2 text-sm">
-                    <Download className="w-4 h-4" />
-                    Export CSV
-                  </button>
-                </div>
-
-                <div className="overflow-x-auto">
-                  <table className="min-w-full divide-y divide-gray-200">
-                    <thead className="bg-gray-50">
-                      <tr>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                          Date
-                        </th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                          Supplier
-                        </th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                          Items
-                        </th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                          Total
-                        </th>
-                      </tr>
-                    </thead>
-                    <tbody className="bg-white divide-y divide-gray-200">
-                      {filteredPurchases.map((purchase) => (
-                        <tr key={purchase.id} className="hover:bg-gray-50">
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                            {new Date(purchase.date).toLocaleDateString()}
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{purchase.supplier}</td>
-                          <td className="px-6 py-4 text-sm text-gray-900">
-                            <div className="space-y-1">
-                              {purchase.items.map((item, index) => (
-                                <div key={index} className="text-xs">
-                                  {getProductName(item.productId)} - Qty: {item.quantity}
-                                </div>
-                              ))}
-                            </div>
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-blue-600">
-                            Rs {purchase.total.toFixed(2)}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            )}
-          </div>
+        <div className="border-b flex gap-1">
+          {tabs.map(t => (
+            <button key={t.id} onClick={() => setTab(t.id)} className={`px-4 py-2 text-sm font-medium rounded-t-lg transition-colors ${tab === t.id ? 'bg-white border border-b-white text-[#2C5364] font-bold -mb-px' : 'text-gray-500 hover:text-gray-700'}`}>{t.label}</button>
+          ))}
         </div>
+
+        {/* Overview Tab */}
+        {tab === "overview" && (
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <div className="bg-white rounded-xl shadow-sm p-6 border">
+              <h3 className="font-bold text-gray-900 mb-4">Monthly Revenue (Invoices Only)</h3>
+              <div className="h-72">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={salesChart}><CartesianGrid strokeDasharray="3 3" vertical={false} /><XAxis dataKey="name" /><YAxis tickFormatter={v => `Rs ${(v/1000).toFixed(0)}k`} /><Tooltip formatter={v => [`Rs ${Number(v).toLocaleString()}`, "Revenue"]} /><Bar dataKey="Revenue" fill="#2C5364" radius={[4,4,0,0]} /></BarChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+            <div className="bg-white rounded-xl shadow-sm p-6 border">
+              <h3 className="font-bold text-gray-900 mb-4">Warehouse Stock Comparison</h3>
+              <div className="h-72">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={stockChart}><CartesianGrid strokeDasharray="3 3" vertical={false} /><XAxis dataKey="name" /><YAxis /><Tooltip /><Bar dataKey="Stock" fill="#0F2027" radius={[4,4,0,0]} /></BarChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Customer-wise Tab */}
+        {tab === "customers" && (
+          <div className="bg-white rounded-xl shadow-sm border overflow-hidden">
+            <table className="min-w-full divide-y divide-gray-200 text-sm">
+              <thead className="bg-gray-50">
+                <tr>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">#</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Customer</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Total Sales</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">No. of Invoices</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Avg Invoice</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-100">
+                {customerReport.map((c, i) => (
+                  <tr key={c.name} className="hover:bg-gray-50">
+                    <td className="px-6 py-3 text-gray-400 font-medium">{i + 1}</td>
+                    <td className="px-6 py-3 font-semibold text-gray-900">{c.name}</td>
+                    <td className="px-6 py-3 font-bold text-green-700">Rs {c.total.toLocaleString()}</td>
+                    <td className="px-6 py-3 text-gray-600">{c.count}</td>
+                    <td className="px-6 py-3 text-gray-600">Rs {(c.total / c.count).toLocaleString(undefined, { maximumFractionDigits: 0 })}</td>
+                  </tr>
+                ))}
+                {customerReport.length === 0 && <tr><td colSpan={5} className="text-center py-8 text-gray-400">No invoice data yet.</td></tr>}
+              </tbody>
+            </table>
+          </div>
+        )}
+
+        {/* Product-wise Tab */}
+        {tab === "products" && (
+          <div className="bg-white rounded-xl shadow-sm border overflow-hidden">
+            <table className="min-w-full divide-y divide-gray-200 text-sm">
+              <thead className="bg-gray-50">
+                <tr>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Product</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Qty Sold</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Revenue</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Profit</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Margin %</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-100">
+                {productReport.map(p => (
+                  <tr key={p.name} className="hover:bg-gray-50">
+                    <td className="px-6 py-3 font-semibold text-gray-900">{p.name}</td>
+                    <td className="px-6 py-3 text-gray-600">{p.qty}</td>
+                    <td className="px-6 py-3 font-bold text-blue-700">Rs {p.revenue.toLocaleString()}</td>
+                    <td className="px-6 py-3 font-bold text-green-700">Rs {p.profit.toLocaleString()}</td>
+                    <td className="px-6 py-3"><span className={`px-2 py-0.5 rounded text-xs font-bold ${p.margin >= 20 ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'}`}>{p.margin}%</span></td>
+                  </tr>
+                ))}
+                {productReport.length === 0 && <tr><td colSpan={5} className="text-center py-8 text-gray-400">No product sales data yet.</td></tr>}
+              </tbody>
+            </table>
+          </div>
+        )}
+
+        {/* Stock Tab */}
+        {tab === "stock" && (
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <div className="bg-white rounded-xl shadow-sm p-6 border">
+              <h3 className="font-bold text-gray-900 mb-4">Warehouse Stock</h3>
+              <div className="h-72">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={stockChart}><CartesianGrid strokeDasharray="3 3" vertical={false} /><XAxis dataKey="name" /><YAxis /><Tooltip /><Bar dataKey="Stock" fill="#2C5364" radius={[4,4,0,0]} /></BarChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+            <div className="bg-white rounded-xl shadow-sm p-6 border">
+              <h3 className="font-bold text-gray-900 mb-2">Summary</h3>
+              <div className="space-y-3">
+                {stockChart.map(w => (
+                  <div key={w.name} className="flex justify-between items-center p-3 bg-gray-50 rounded-lg">
+                    <span className="font-medium text-gray-700">{w.name} Warehouse</span>
+                    <span className="font-bold text-gray-900 text-lg">{w.Stock} units</span>
+                  </div>
+                ))}
+                <div className="flex justify-between items-center p-3 bg-blue-50 rounded-lg border border-blue-200">
+                  <span className="font-semibold text-blue-800">Combined Total</span>
+                  <span className="font-bold text-blue-900 text-lg">{stockChart.reduce((s, w) => s + w.Stock, 0)} units</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </Layout>
   )
